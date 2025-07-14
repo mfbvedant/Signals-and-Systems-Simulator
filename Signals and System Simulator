@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Signal Processing Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony (Slate & Blue) -->
+    <!-- Application Structure Plan: The application is structured into four main thematic, interactive sections accessible via a top navigation bar: 'Signal Explorer', 'Signal Operations', 'Signal Classifications', and 'Analog to Digital'. This modular, task-oriented design was chosen over a linear format to make the dense, academic content more approachable. It allows users to freely explore concepts in any order. The 'Signal Explorer' is the core, providing a hands-on playground to build intuition. 'Operations' builds on this by showing transformations. 'Classifications' provides organized, bite-sized theoretical knowledge, and 'Analog to Digital' visually explains a key process. This structure prioritizes interactive learning and user-driven exploration over passive reading, which is more effective for understanding complex engineering topics. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Standard Signal Definitions (Sine, Step, Ramp etc.) -> Goal: Visualize & Explore -> Viz/Presentation: Interactive Chart.js canvas -> Interaction: Dropdown for signal type, sliders for parameters (amplitude, frequency), toggle for CT/DT. Chart updates in real-time. -> Justification: Transforms static formulas into a dynamic learning tool, building intuition faster than text alone.
+        - Report Info: Time-Domain Operations (Scaling, Shifting) -> Goal: Understand transformations -> Viz/Presentation: Single Chart.js canvas showing the transformed signal -> Interaction: Select base signal, use sliders to apply operations (time shift, time scale, etc.). -> Justification: Makes abstract mathematical manipulations concrete and visually obvious.
+        - Report Info: Signal Classifications (Periodic, Causal, Energy/Power) -> Goal: Inform & Categorize -> Viz/Presentation: Styled HTML/Tailwind cards in a grid layout. -> Interaction: Click-to-explore (future enhancement), with clear text and math definitions. -> Justification: Organizes dense theoretical information into clean, digestible chunks, improving readability and retention.
+        - Report Info: CT to Digital Conversion -> Goal: Explain Sampling & Quantization -> Viz/Presentation: A multi-step visualization on a single Chart.js canvas. -> Interaction: Sliders to control sampling rate and quantization bits. -> Justification: Demystifies the complex process of digitization by visualizing each step and its dependencies.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link.active {
+            border-bottom-color: #2563eb; /* blue-600 */
+            color: #2563eb;
+        }
+        .nav-link:hover {
+            color: #2563eb;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #2563eb;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #2563eb;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-slate-900">Signal Explorer</h1>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#explorer" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-slate-700">Explorer</a>
+                        <a href="#operations" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-slate-700">Operations</a>
+                        <a href="#classifications" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-slate-700">Classifications</a>
+                        <a href="#analog-digital" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-slate-700">Analog to Digital</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                     <select id="mobile-nav" class="bg-white border border-slate-300 rounded-md p-2 text-sm">
+                        <option value="explorer">Explorer</option>
+                        <option value="operations">Operations</option>
+                        <option value="classifications">Classifications</option>
+                        <option value="analog-digital">Analog to Digital</option>
+                    </select>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- Signal Explorer Section -->
+        <section id="explorer" class="content-section">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">Standard Signal Explorer</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-slate-600">This section allows you to interactively generate and visualize standard signals. Select a signal type and adjust its parameters using the sliders to see how its waveform changes in real-time. Toggle between continuous and discrete representations to compare their forms.</p>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div class="md:col-span-1">
+                        <label for="signal-type" class="block text-sm font-medium text-slate-700 mb-1">Signal Type</label>
+                        <select id="signal-type" class="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="sine">Sinusoidal</option>
+                            <option value="step">Unit Step</option>
+                            <option value="ramp">Ramp</option>
+                            <option value="exponential_decay">Exponential Decay</option>
+                            <option value="gaussian">Gaussian</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2 flex justify-end items-center">
+                        <label for="discrete-toggle-explorer" class="mr-3 text-sm font-medium text-slate-700">Discrete</label>
+                        <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" name="discrete-toggle-explorer" id="discrete-toggle-explorer" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                            <label for="discrete-toggle-explorer" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="controls-explorer" class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Controls will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <div class="chart-container">
+                    <canvas id="signalChart"></canvas>
+                </div>
+                 <div id="formula-display" class="mt-4 text-center text-slate-600 font-mono text-lg p-2 bg-slate-100 rounded"></div>
+            </div>
+        </section>
+
+        <!-- Signal Operations Section -->
+        <section id="operations" class="content-section hidden">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">Time-Domain Operations</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-slate-600">Explore fundamental time-domain operations. Select a base signal and then apply amplitude scaling, time scaling (compression/expansion), and time shifting (delay/advance) to observe their effects on the signal's waveform.</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                 <div id="controls-operations" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                     <!-- Operation controls will be inserted here -->
+                 </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                 <div class="chart-container">
+                    <canvas id="operationChart"></canvas>
+                </div>
+                 <p class="mt-4 text-center text-slate-600 font-mono text-lg p-2 bg-slate-100 rounded">
+                    Result: <span id="op-formula-y">y(t)</span> = <span id="op-formula-amp"></span> x( <span id="op-formula-scale"></span> t - <span id="op-formula-shift"></span> )
+                 </p>
+            </div>
+        </section>
+
+        <!-- Classifications Section -->
+        <section id="classifications" class="content-section hidden">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">Signal Classifications</h2>
+                 <p class="mt-2 max-w-3xl mx-auto text-slate-600">Signals are categorized based on their inherent properties. This section provides an overview of key classifications that are fundamental to signal analysis, such as periodicity, energy/power distribution, and causality.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Periodic vs. Non-periodic</h3>
+                    <p class="text-slate-600 mb-3">A signal is periodic if its waveform repeats at regular intervals. A continuous signal $x(t)$ is periodic if $x(t) = x(t+T)$ for some period T. A discrete signal $x(n)$ is periodic if $x(n) = x(n+N)$ for some integer period N.</p>
+                    <p class="text-slate-600 text-sm">Sinusoids are always periodic in continuous time, but only periodic in discrete time if their frequency is a rational number.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Energy vs. Power</h3>
+                    <p class="text-slate-600 mb-3">This classifies signals based on their strength. <strong class="text-slate-800">Energy signals</strong> have finite total energy ($E < \infty$) and zero average power. They are typically non-periodic and exist for a finite duration (e.g., a single pulse). <strong class="text-slate-800">Power signals</strong> have infinite energy but finite average power ($P < \infty$). They typically exist for all time (e.g., a sinusoid).</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Causal vs. Non-causal</h3>
+                    <p class="text-slate-600 mb-3">Causality relates to a signal's existence over time. A signal is <strong class="text-slate-800">causal</strong> if it is zero for all negative time ($x(t) = 0$ for $t < 0$). This is crucial for real-world systems, as they cannot respond to an input before it occurs. A <strong class="text-slate-800">non-causal</strong> signal has non-zero values in the past ($t < 0$).</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Deterministic vs. Random</h3>
+                    <p class="text-slate-600 mb-3"><strong class="text-slate-800">Deterministic</strong> signals can be fully described by a mathematical formula (e.g., $x(t) = \cos(2\pi t)$). Their future values are predictable. <strong class="text-slate-800">Random</strong> signals have inherent uncertainty and can only be described by statistical properties (e.g., thermal noise in a circuit).</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Even vs. Odd</h3>
+                    <p class="text-slate-600 mb-3">This refers to signal symmetry. An <strong class="text-slate-800">even</strong> signal is symmetric about the vertical axis: $x(t) = x(-t)$. A cosine wave is an even signal. An <strong class="text-slate-800">odd</strong> signal is anti-symmetric: $x(t) = -x(-t)$. A sine wave is an odd signal. Any signal can be decomposed into an even and an odd part.</p>
+                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h3 class="font-bold text-lg mb-2 text-slate-900">Continuous vs. Discrete</h3>
+                    <p class="text-slate-600 mb-3"><strong class="text-slate-800">Continuous-Time (CT)</strong> signals are defined for every instant of time, like a sound wave. <strong class="text-slate-800">Discrete-Time (DT)</strong> signals are defined only at specific, distinct points in time, typically through sampling a continuous signal. This is the first step in digital processing.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analog to Digital Section -->
+        <section id="analog-digital" class="content-section hidden">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">Analog to Digital Conversion</h2>
+                <p class="mt-2 max-w-3xl mx-auto text-slate-600">Real-world signals are analog (continuous). To process them digitally, they must be converted. This involves two key steps: **Sampling** (capturing values at discrete time intervals) and **Quantization** (approximating those values to a finite set of levels). Explore how these parameters affect the digital signal.</p>
+            </div>
+             <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                 <div id="controls-ad" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                     <!-- A/D controls will be inserted here -->
+                 </div>
+            </div>
+             <div class="bg-white p-4 rounded-lg shadow-lg">
+                 <div class="chart-container">
+                    <canvas id="adChart"></canvas>
+                </div>
+                 <p class="mt-4 text-center text-slate-500 text-sm">Observe how low sampling rates can miss key features (aliasing), and how few quantization bits result in a coarse, "stair-step" approximation.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const charts = {};
+        const state = {
+            explorer: {
+                signalType: 'sine',
+                isDiscrete: false,
+                params: { amp: 1, freq: 1, phase: 0, decay: 0.5, mean: 0, std_dev: 1 }
+            },
+            operations: {
+                signalType: 'ramp',
+                params: { amp: 1, scale: 1, shift: 0 }
+            },
+            ad: {
+                sampleRate: 10,
+                quantBits: 3
+            }
+        };
+
+        const signalFormulas = {
+            sine: (p) => `${p.amp.toFixed(2)} * cos(2π * ${p.freq.toFixed(2)}t + ${p.phase.toFixed(2)})`,
+            step: () => `u(t)`,
+            ramp: () => `t * u(t)`,
+            exponential_decay: (p) => `${p.amp.toFixed(2)} * e^(-${p.decay.toFixed(2)}t) * u(t)`,
+            gaussian: (p) => `e^(-(t - ${p.mean.toFixed(2)})^2 / (2 * ${p.std_dev.toFixed(2)}^2))`
+        };
+
+        const explorerControlsConfig = {
+            sine: [
+                { id: 'amp', label: 'Amplitude', min: 0.1, max: 2, step: 0.1, value: 1 },
+                { id: 'freq', label: 'Frequency (Hz)', min: 0.5, max: 5, step: 0.1, value: 1 },
+                { id: 'phase', label: 'Phase (rad)', min: 0, max: 2 * Math.PI, step: 0.1, value: 0 }
+            ],
+            exponential_decay: [
+                { id: 'amp', label: 'Amplitude', min: 0.1, max: 2, step: 0.1, value: 1 },
+                { id: 'decay', label: 'Decay Rate', min: 0.1, max: 2, step: 0.1, value: 0.5 }
+            ],
+            gaussian: [
+                { id: 'mean', label: 'Mean (μ)', min: -2, max: 2, step: 0.1, value: 0 },
+                { id: 'std_dev', label: 'Std Dev (σ)', min: 0.2, max: 2, step: 0.1, value: 1 }
+            ],
+            step: [],
+            ramp: []
+        };
+        
+        const operationsControlsConfig = [
+            { id: 'amp', label: 'Amplitude Scale', min: 0.2, max: 3, step: 0.1, value: 1 },
+            { id: 'scale', label: 'Time Scale', min: 0.2, max: 3, step: 0.1, value: 1 },
+            { id: 'shift', label: 'Time Shift', min: -5, max: 5, step: 0.1, value: 0 },
+        ];
+
+        const adControlsConfig = [
+            { id: 'sampleRate', label: 'Sample Rate (Hz)', min: 2, max: 50, step: 1, value: 10 },
+            { id: 'quantBits', label: 'Quantization Bits', min: 1, max: 8, step: 1, value: 3 }
+        ];
+
+        function createSlider(config, stateObj, updateFn) {
+            const container = document.createElement('div');
+            const label = document.createElement('label');
+            label.htmlFor = config.id;
+            label.className = "block text-sm font-medium text-slate-700 mb-1";
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.className = "float-right font-mono";
+            valueSpan.textContent = parseFloat(config.value).toFixed(2);
+            label.textContent = config.label;
+            label.appendChild(valueSpan);
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.id = config.id;
+            slider.min = config.min;
+            slider.max = config.max;
+            slider.step = config.step;
+            slider.value = config.value;
+            slider.className = "w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer";
+
+            slider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                stateObj[config.id] = value;
+                valueSpan.textContent = value.toFixed(2);
+                updateFn();
+            });
+
+            container.appendChild(label);
+            container.appendChild(slider);
+            return container;
+        }
+
+        function populateControls(containerId, config, stateObj, updateFn) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            config.forEach(controlConf => {
+                const slider = createSlider(controlConf, stateObj, updateFn);
+                container.appendChild(slider);
+            });
+        }
+
+        function generateSignalData(type, params, isDiscrete, opParams = {amp: 1, scale: 1, shift: 0}) {
+            const data = [];
+            const timeStep = isDiscrete ? 1 : 0.05;
+            const numPoints = isDiscrete ? 41 : 201;
+            const start = isDiscrete ? -20 : -10;
+
+            for (let i = 0; i < numPoints; i++) {
+                let t = start + i * timeStep;
+                let t_scaled = opParams.scale * t - opParams.shift;
+                let y = 0;
+
+                switch (type) {
+                    case 'sine':
+                        y = params.amp * Math.cos(2 * Math.PI * params.freq * t_scaled + params.phase);
+                        break;
+                    case 'step':
+                        y = (t_scaled >= 0) ? 1 : 0;
+                        break;
+                    case 'ramp':
+                        y = (t_scaled >= 0) ? t_scaled : 0;
+                        break;
+                    case 'exponential_decay':
+                        y = (t_scaled >= 0) ? params.amp * Math.exp(-params.decay * t_scaled) : 0;
+                        break;
+                    case 'gaussian':
+                        y = Math.exp(-Math.pow(t_scaled - params.mean, 2) / (2 * Math.pow(params.std_dev, 2)));
+                        break;
+                }
+                data.push({ x: t, y: y * opParams.amp });
+            }
+            return data;
+        }
+
+        function createChart(canvasId, isDiscrete = false) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            return new Chart(ctx, {
+                type: isDiscrete ? 'bar' : 'line',
+                data: {
+                    datasets: [{
+                        label: 'Signal Amplitude',
+                        data: [],
+                        borderColor: '#2563eb',
+                        backgroundColor: '#2563eb',
+                        borderWidth: 2,
+                        pointRadius: isDiscrete ? 0 : 0.5,
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            title: { display: true, text: isDiscrete ? 'Sample (n)' : 'Time (t)' },
+                            grid: { color: '#e2e8f0' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Amplitude' },
+                            grid: { color: '#e2e8f0' },
+                            min: -2.5,
+                            max: 2.5
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateExplorerChart() {
+            const { signalType, isDiscrete, params } = state.explorer;
+            const data = generateSignalData(signalType, params, isDiscrete);
+
+            if (charts.explorer) charts.explorer.destroy();
+            charts.explorer = createChart('signalChart', isDiscrete);
+            
+            charts.explorer.data.datasets[0].data = data;
+            charts.explorer.update();
+
+            document.getElementById('formula-display').textContent = signalFormulas[signalType] ? `x(t) = ${signalFormulas[signalType](params)}` : '';
+        }
+
+        function setupExplorer() {
+            const { signalType, params } = state.explorer;
+            const config = explorerControlsConfig[signalType];
+            populateControls('controls-explorer', config, params, updateExplorerChart);
+            updateExplorerChart();
+        }
+
+        function updateOperationsChart() {
+            const { signalType, params } = state.operations;
+            const baseParams = state.explorer.params; 
+            const data = generateSignalData(signalType, baseParams, false, params);
+
+            if (!charts.operations) {
+                charts.operations = createChart('operationChart');
+            }
+            charts.operations.data.datasets[0].data = data;
+            charts.operations.update();
+            
+            document.getElementById('op-formula-amp').textContent = params.amp.toFixed(2);
+            document.getElementById('op-formula-scale').textContent = params.scale.toFixed(2);
+            document.getElementById('op-formula-shift').textContent = params.shift.toFixed(2);
+        }
+        
+        function setupOperations() {
+            const container = document.getElementById('controls-operations');
+            container.innerHTML = '';
+            
+            const selectContainer = document.createElement('div');
+            selectContainer.innerHTML = `<label for="op-signal-type" class="block text-sm font-medium text-slate-700 mb-1">Base Signal</label>
+            <select id="op-signal-type" class="w-full p-2 border border-slate-300 rounded-md shadow-sm">
+                <option value="ramp">Ramp</option>
+                <option value="sine">Sine</option>
+                <option value="gaussian">Gaussian</option>
+            </select>`;
+            container.appendChild(selectContainer);
+
+            document.getElementById('op-signal-type').addEventListener('change', (e) => {
+                state.operations.signalType = e.target.value;
+                updateOperationsChart();
+            });
+
+            populateControls('controls-operations', operationsControlsConfig, state.operations.params, updateOperationsChart);
+            updateOperationsChart();
+        }
+
+        function updateADChart() {
+            if (charts.ad) charts.ad.destroy();
+            const canvas = document.getElementById('adChart');
+            const ctx = canvas.getContext('2d');
+            const { sampleRate, quantBits } = state.ad;
+
+            const analogData = generateSignalData('sine', { amp: 1, freq: 1, phase: 0 }, false);
+            
+            const numSamples = Math.floor(20 * sampleRate);
+            const sampledData = [];
+            for(let i=0; i <= numSamples; i++) {
+                const t = -10 + i * (1/sampleRate);
+                sampledData.push({x: t, y: Math.cos(2 * Math.PI * t)})
+            }
+            
+            const numLevels = Math.pow(2, quantBits);
+            const quantizationStep = 2 / numLevels;
+            const quantizedData = sampledData.map(p => {
+                const level = Math.round((p.y + 1) / quantizationStep);
+                return { x: p.x, y: (level * quantizationStep) - 1 };
+            });
+
+            charts.ad = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        { label: 'Analog Signal', data: analogData, borderColor: '#cbd5e1', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 },
+                        { label: 'Sampled', type: 'bar', data: sampledData, backgroundColor: '#60a5fa', barPercentage: 0.1 },
+                        { label: 'Quantized', type: 'line', data: quantizedData, borderColor: '#dc2626', borderWidth: 2, pointRadius: 1, steppped: true, fill: false }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'linear', title: { display: true, text: 'Time (t)' }, min: -5, max: 5 },
+                        y: { title: { display: true, text: 'Amplitude' }, min: -1.5, max: 1.5 }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                    }
+                }
+            });
+        }
+        
+        function setupAD() {
+            populateControls('controls-ad', adControlsConfig, state.ad, updateADChart);
+            updateADChart();
+        }
+
+
+        // Navigation
+        const navLinks = document.querySelectorAll('.nav-link');
+        const mobileNav = document.getElementById('mobile-nav');
+        const sections = document.querySelectorAll('.content-section');
+
+        function setActiveSection(hash) {
+            const targetId = hash.substring(1);
+            sections.forEach(section => {
+                section.classList.toggle('hidden', section.id !== targetId);
+            });
+            navLinks.forEach(link => {
+                link.classList.toggle('active', link.hash === hash);
+            });
+            
+            if(mobileNav.value !== targetId) {
+                mobileNav.value = targetId;
+            }
+
+            switch(targetId) {
+                case 'explorer': setupExplorer(); break;
+                case 'operations': setupOperations(); break;
+                case 'classifications': break; // Static content
+                case 'analog-digital': setupAD(); break;
+            }
+        }
+        
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                history.pushState(null, null, e.target.hash);
+                setActiveSection(e.target.hash);
+            });
+        });
+        
+        mobileNav.addEventListener('change', (e) => {
+            const hash = '#' + e.target.value;
+            history.pushState(null, null, hash);
+            setActiveSection(hash);
+        });
+
+        window.addEventListener('popstate', () => {
+             setActiveSection(window.location.hash || '#explorer');
+        });
+
+        document.getElementById('signal-type').addEventListener('change', (e) => {
+            state.explorer.signalType = e.target.value;
+            setupExplorer();
+        });
+
+        document.getElementById('discrete-toggle-explorer').addEventListener('change', (e) => {
+            state.explorer.isDiscrete = e.target.checked;
+            updateExplorerChart();
+        });
+
+        // Initial load
+        const initialHash = window.location.hash || '#explorer';
+        setActiveSection(initialHash);
+
+    });
+    </script>
+    <style>
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #2563eb;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #2563eb;
+        }
+    </style>
+</body>
+</html>
